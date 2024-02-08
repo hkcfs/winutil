@@ -10,7 +10,7 @@
     Author         : Chris Titus @christitustech
     Runspace Author: @DeveloperDurp
     GitHub         : https://github.com/ChrisTitusTech
-    Version        : 24.02.03
+    Version        : 24.02.07
 #>
 param (
     [switch]$Debug,
@@ -47,7 +47,7 @@ Add-Type -AssemblyName System.Windows.Forms
 # Variable to sync between runspaces
 $sync = [Hashtable]::Synchronized(@{})
 $sync.PSScriptRoot = $PSScriptRoot
-$sync.version = "24.02.03"
+$sync.version = "24.02.07"
 $sync.configs = @{}
 $sync.ProcessRunning = $false
 
@@ -241,9 +241,9 @@ function Get-Oscdimg {
         Get-Oscdimg
     #>
     param( [Parameter(Mandatory=$true)] 
-        $oscdimgPath = "$env:TEMP\oscdimg.exe"
+        [string]$oscdimgPath
     )
-    
+    $oscdimgPath = "$env:TEMP\oscdimg.exe"
     $downloadUrl = "https://github.com/ChrisTitusTech/winutil/raw/main/releases/oscdimg.exe"
     Invoke-RestMethod -Uri $downloadUrl -OutFile $oscdimgPath
     $hashResult = Get-FileHash -Path $oscdimgPath -Algorithm SHA256
@@ -358,38 +358,6 @@ function Get-WinUtilInstallerProcess {
         return $true
     }
     return $false
-}
-function Get-WinUtilRegistry {
-    <#
-
-    .SYNOPSIS
-        Gets the value of a registry key
-
-    .EXAMPLE
-        Get-WinUtilRegistry -Name "PublishUserActivities" -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" -Type "DWord" -Value "0"
-
-    #>
-    param (
-        $Name,
-        $Path,
-        $Type,
-        $Value
-    )
-
-    Try{
-        $syscheckvalue = Get-ItemPropertyValue -Path $Path -Value $Value # Return Value
-
-    }
-    Catch [System.Security.SecurityException] {
-        Write-Warning "Unable to set $Path\$Name to $Value due to a Security Exception"
-    }
-    Catch [System.Management.Automation.ItemNotFoundException] {
-        Write-Warning $psitem.Exception.ErrorRecord
-    }
-    Catch{
-        Write-Warning "Unable to set $Name due to unhandled exception"
-        Write-Warning $psitem.Exception.StackTrace
-    }
 }
 Function Get-WinUtilToggleStatus {
     <#
@@ -527,7 +495,7 @@ function Install-WinUtilChoco {
     try {
         Write-Host "Checking if Chocolatey is Installed..."
 
-        if((Test-WinUtilPackageManager -choco)){
+        if((Get-Command -Name choco -ErrorAction Ignore)) {
             Write-Host "Chocolatey Already Installed"
             return
         }
@@ -692,7 +660,7 @@ function Invoke-MicroWin-Helper {
 
 }
 
-function Is-CompatibleImage() {
+function Test-CompatibleImage() {
 <#
 
     .SYNOPSIS
@@ -2422,7 +2390,6 @@ function Invoke-ScratchDialog {
     [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
     $Dialog = New-Object System.Windows.Forms.FolderBrowserDialog
     $Dialog.SelectedPath =          $sync.MicrowinScratchDirBox.Text
-    $DialogShowNewFolderButton = $true
     $Dialog.ShowDialog() 
     $filePath = $Dialog.SelectedPath
         Write-Host "No ISO is chosen+  $filePath"
@@ -2946,7 +2913,7 @@ function Invoke-WPFGetInstalled {
         return
     }
 
-    if(!(Test-WinUtilPackageManager -winget) -and $checkbox -eq "winget"){
+    if(!(Get-Command -Name winget -ErrorAction SilentlyContinue) -and $checkbox -eq "winget"){
         Write-Host "==========================================="
         Write-Host "--       Winget is not installed        ---"
         Write-Host "==========================================="
@@ -3280,7 +3247,7 @@ function Invoke-WPFInstall {
         }
         Catch {
             Write-Host "==========================================="
-            Write-Host "--      Winget failed to install        ---"
+            Write-Host "Error: $_"
             Write-Host "==========================================="
         }
         Start-Sleep -Seconds 5
@@ -3294,7 +3261,7 @@ function Invoke-WPFInstallUpgrade {
         Invokes the function that upgrades all installed programs using winget
 
     #>
-    if(!(Test-WinUtilPackageManager -winget)){
+    if(!(Get-Command -Name winget -ErrorAction SilentlyContinue)){
         Write-Host "==========================================="
         Write-Host "--       Winget is not installed        ---"
         Write-Host "==========================================="
@@ -3376,7 +3343,7 @@ public class PowerManagement {
     $imgVersion = (Get-WindowsImage -ImagePath $mountDir\sources\install.wim -Index $index).Version
 
     # Detect image version to avoid performing MicroWin processing on Windows 8 and earlier
-    if ((Is-CompatibleImage $imgVersion) -eq $false)
+    if ((Test-CompatibleImage $imgVersion) -eq $false)
     {
 		$msg = "This image is not compatible with MicroWin processing. Make sure it isn't a Windows 8 or earlier image."
         $dlg_msg = $msg + "`n`nIf you want more information, the version of the image selected is $($imgVersion)`n`nIf an image has been incorrectly marked as incompatible, report an issue to the developers."
@@ -3939,7 +3906,7 @@ function Invoke-WPFShortcut {
     $Shortcut = $WshShell.CreateShortcut($FileBrowser.FileName)
     $Shortcut.TargetPath = $SourceExe
     $Shortcut.Arguments = $ArgumentsToSourceExe
-    if ($iconPath -ne $null) {
+    if ($null -ne $iconPath) {
         $shortcut.IconLocation = $iconPath
     }
     $Shortcut.Save()
@@ -7731,7 +7698,7 @@ $sync.configs.applications = '{
 	"WPFInstallintelpresentmon": {
 		"category": "Utilities",
 		"choco": "na",
-		"content": "Intel?? PresentMon",
+		"content": "Intel? PresentMon",
 		"description": "A new gaming performance overlay and telemetry application to monitor and measure your gaming experience.",
 		"link": "https://game.intel.com/us/stories/intel-presentmon/",
 		"winget": "Intel.PresentMon.Beta"
